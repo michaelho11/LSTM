@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
 import yfinance as yf
-# import tensorflow as tf
+from keras.models import Sequential
+import tensorflow as tf
 # import keras
-# from keras import optimizers
+from keras import optimizers
 # from keras.callbacks import History
-# from keras.models import Model
-# from keras.layers import Dense, Dropout, LSTM, Input, Activation, concatenate
+from keras.models import Model
+from keras.layers import Dense, Dropout, LSTM, Input, Activation, concatenate
 from sklearn import preprocessing
 
 def dataframe_download (stock, date):
@@ -17,9 +18,8 @@ def dataframe_download (stock, date):
     # print (close)
     return df
 
-def test_train_split(df,ratio):
+def test_train_split(df,ratio,history_point):
     #1. dividing the dataset
-    history_point = 3
     index = int(len(df)*ratio)
     train_data_set = df[:index]
     test_data_set = df[index:]
@@ -30,9 +30,10 @@ def test_train_split(df,ratio):
     normaliser = preprocessing.MinMaxScaler()
     normalised_train_data = normaliser.fit_transform(train_data_set) #fit = calculated mean/variance
 
+    # print(normalised_train_data)
     x_train = np.array([normalised_train_data[:,0:][i:i+history_point].copy() for i in
                         range(len(normalised_train_data)-history_point)])
-    y_train = np.array([normalised_train_data[:,0][i+history_point].copy() for i in
+    y_train = np.array([normalised_train_data[:,3][i+history_point].copy() for i in
                         range(len(normalised_train_data)-history_point)])
     y_train = np.expand_dims(y_train,-1)
 
@@ -42,7 +43,7 @@ def test_train_split(df,ratio):
     y_test = np.array([test_data_set['Adj Close'][i + history_point].copy() for i in
                         range(len(normalised_train_data) - history_point)])
     y_test = np.expand_dims(y_test,-1)
-    print(y_test)
+    # print(y_test)
 
     #3. normalise the actual price
     actual_price_normaliser = preprocessing.MinMaxScaler()
@@ -50,6 +51,9 @@ def test_train_split(df,ratio):
                         range(len(train_data_set)-history_point)])
     nor_adj_close = np.expand_dims(nor_adj_close, 1)
     actual_price_normaliser.fit(nor_adj_close)
+
+    print(x_train)
+    print (x_train.shape)
 
     return x_train, y_train, x_test, y_test, actual_price_normaliser
 
@@ -86,12 +90,25 @@ def add_technical_indicators(stock_df):
 
     return stock_df_copy
 
+def LSTM_model (x_train, y_train, history_point):
+    n_features = 6
+    model = Sequential()
+    model.add(LSTM(21, activation='relu',input_shape=(history_point,n_features), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.compile(optimizer=optimizers.Adam(lr= 0.0008), loss='mse')
+    model.fit(x=x_train, y=y_train,batch_size=15, epochs=170, shuffle=True, validation_split=0.1)
+
+    return model
+
 
 # print (dataframe_download ('0700.HK', '2022-01-01'))
 stock = dataframe_download('2013.HK', '2022-01-01')
+history_point = 3
+test_train_split_ratio = 0.2
 new_stock_df = add_technical_indicators(stock)
-test_train_split(stock,0.2)
-print(new_stock_df.to_string())
+x_train, y_train, x_test, y_test, actual_price_normaliser= test_train_split(stock,test_train_split_ratio,history_point)
+LSTM_model(x_train, y_train, history_point)
+# print(new_stock_df.to_string())
 
 
 
